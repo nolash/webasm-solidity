@@ -18,7 +18,7 @@ interface JudgeInterface {
 
 interface CustomJudge {
     // Initializes a new custom verification game
-    function init(bytes32 state, uint r1, uint r2, uint r3) public returns (bytes32);
+    function init(bytes32 state, uint r1, uint r2, uint r3, address solver, address verifier) public returns (bytes32);
     
     // Last time the task was updated
     function clock(bytes32 id) public returns (uint);
@@ -213,6 +213,12 @@ contract Interactive2 {
     function blockedTime(uint id) public view returns (uint) {
         return blocked[id] + 5;
     }
+    
+    function clock(bytes32 id) public returns (uint) {
+        Record storage r = records[id];
+        if (r.sub_task != 0) return r.judge.clock(r.sub_task);
+        else return r.clock;
+    }
 
     function getIter(bytes32 id) internal view returns (uint it, uint i1, uint i2) {
         Record storage r = records[id];
@@ -386,7 +392,7 @@ contract Interactive2 {
         if (q == 5 && alu_hint == 0xff) {
           r.state = State.Custom;
           r.judge = judges[uint64(regs[3])];
-          r.sub_task = r.judge.init(roots[10], regs[0], regs[1], regs[2]);
+          r.sub_task = r.judge.init(roots[10], regs[0], regs[1], regs[2], r.prover, r.challenger);
           r.ex_state = proof[0];
           r.ex_reg = uint(proof[1]);
           judge.judgeCustom(r.result[3], r.result[4], proof[0], uint(proof[1]), op, regs, roots, pointers);
