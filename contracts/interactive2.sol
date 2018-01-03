@@ -4,14 +4,14 @@ interface JudgeInterface {
     function judge(bytes32[13] res, uint q,
                         bytes32[] _proof,
                         bytes32 vm_, bytes32 op, uint[4] regs,
-                        bytes32[10] roots, uint[4] pointers) public returns (uint);
+                        bytes32[11] roots, uint[4] pointers) public returns (uint);
     function judgeFinality(bytes32[13] res, bytes32[] _proof,
-                        bytes32[10] roots, uint[4] pointers) public returns (uint);
-    function checkFileProof(bytes32 state, bytes32[10] roots, uint[4] pointers, bytes32[] proof, uint loc) public returns (bool);
+                        bytes32[11] roots, uint[4] pointers) public returns (uint);
+    function checkFileProof(bytes32 state, bytes32[11] roots, uint[4] pointers, bytes32[] proof, uint loc) public returns (bool);
     function checkProof(bytes32 hash, bytes32 root, bytes32[] proof, uint loc) public returns (bool);
 
-    function calcStateHash(bytes32[10] roots, uint[4] pointers) public returns (bytes32);
-    function calcIOHash(bytes32[10] roots) public returns (bytes32);
+    function calcStateHash(bytes32[11] roots, uint[4] pointers) public returns (bytes32);
+    function calcIOHash(bytes32[11] roots) public returns (bytes32);
 }
 
 contract Interactive2 {
@@ -106,8 +106,8 @@ contract Interactive2 {
         return uniq;
     }
     
-    function initialize(bytes32 id, bytes32[10] s_roots, uint[4] s_pointers, uint _steps,
-                                    bytes32[10] e_roots, uint[4] e_pointers) public {
+    function initialize(bytes32 id, bytes32[11] s_roots, uint[4] s_pointers, uint _steps,
+                                    bytes32[11] e_roots, uint[4] e_pointers) public {
         Record storage r = records[id];
         require(msg.sender == r.next && r.state == State.Started);
         // check first state here
@@ -338,10 +338,11 @@ contract Interactive2 {
 
     event WinnerSelected(bytes32 id);
     
+    // so here, if the operation is custom, and phase is ALU, we need to start custom judging
     function callJudge(bytes32 id, uint i1, uint q,
                         bytes32[] proof,
                         bytes32 vm, bytes32 op, uint[4] regs,
-                        bytes32[10] roots, uint[4] pointers) public {
+                        bytes32[11] roots, uint[4] pointers) public {
         Record storage r = records[id];
         require(r.state == State.SelectedPhase && r.phase == q && msg.sender == r.prover && r.idx1 == i1 &&
                 r.next == r.prover);
@@ -355,7 +356,7 @@ contract Interactive2 {
     // Challenger has claimed that the state is not final
     function callFinalityJudge(bytes32 id, uint i1,
                         bytes32[] proof,
-                        bytes32[10] roots, uint[4] pointers) public {
+                        bytes32[11] roots, uint[4] pointers) public {
         Record storage r = records[id];
         require(r.state == State.Finality && msg.sender == r.prover && r.idx1 == i1 &&
                 r.next == r.prover);
@@ -370,7 +371,7 @@ contract Interactive2 {
     function callErrorJudge(bytes32 id, uint i1, uint q,
                         bytes32[] proof, uint,
                         bytes32 vm, bytes32 op, uint[4] regs,
-                        bytes32[10] roots, uint[4] pointers) public {
+                        bytes32[11] roots, uint[4] pointers) public {
         Record storage r = records[id];
         require(r.state == State.SelectedErrorPhase && r.phase == q && msg.sender == r.challenger && r.idx1 == i1 &&
                 r.next == r.prover);
@@ -378,9 +379,10 @@ contract Interactive2 {
         WinnerSelected(id);
         r.winner = r.challenger;
         rejected[r.task_id] = true;
+        r.state = State.Finished;
     }
 
-    function checkFileProof(bytes32 state, bytes32[10] roots, uint[4] pointers, bytes32[] proof, uint loc) public returns (bool) {
+    function checkFileProof(bytes32 state, bytes32[11] roots, uint[4] pointers, bytes32[] proof, uint loc) public returns (bool) {
         return judge.checkFileProof(state, roots, pointers, proof, loc);
     }
     
@@ -388,20 +390,9 @@ contract Interactive2 {
         return judge.checkProof(hash, root, proof, loc);
     }
 
-    function calcStateHash(bytes32[10] roots, uint[4] pointers) public returns (bytes32) {
+    function calcStateHash(bytes32[11] roots, uint[4] pointers) public returns (bytes32) {
         return judge.calcStateHash(roots, pointers);
     }
-
-/*
-    function getInitialHash(bytes32 id) public returns (bytes32) {
-        Record storage r = records[id];
-        VMParameters storage params = params[id];
-        bytes32[] memory roots = new bytes32[](10);
-        uint[] memory pointers = new uint[](4);
-        
-        return judge.calcHash(roots, pointers);
-    }
-*/
 
 }
 

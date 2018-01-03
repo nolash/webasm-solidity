@@ -119,11 +119,6 @@ contract Filesystem {
       Consumer(a).consume(id, res);
    }
    
-   function debug_forwardData(bytes32 id, address a) public returns (uint) {
-      File storage f = files[id];
-      return f.data.length;
-   }
-   
    function getRoot(bytes32 id) public view returns (bytes32) {
       File storage f = files[id];
       if (f.root != 0) return f.root;

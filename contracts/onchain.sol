@@ -15,6 +15,7 @@ contract Onchain {
         bytes32 input_size;
         bytes32 input_name;
         bytes32 input_data;
+        bytes32 custom;
     }
 
     struct VM {
@@ -41,7 +42,7 @@ contract Onchain {
     
     bytes32 state;
     
-    function setVM2(bytes32[10] roots, uint[4] pointers) internal {
+    function setVM(bytes32[11] roots, uint[4] pointers) internal {
         vm_r.code = roots[0];
         vm_r.stack = roots[1];
         vm_r.mem = roots[2];
@@ -52,6 +53,7 @@ contract Onchain {
         vm_r.input_size = roots[7];
         vm_r.input_name = roots[8];
         vm_r.input_data = roots[9];
+        vm_r.custom = roots[10];
 
         vm.pc = pointers[0];
         vm.stack_ptr = pointers[1];
@@ -71,10 +73,11 @@ contract Onchain {
         arr[7] = vm_r.input_size;
         arr[8] = vm_r.input_name;
         arr[9] = vm_r.input_data;
-        arr[10] = bytes32(vm.pc);
-        arr[11] = bytes32(vm.stack_ptr);
-        arr[12] = bytes32(vm.call_ptr);
-        arr[13] = bytes32(vm.memsize);
+        arr[10] = vm_r.custom;
+        arr[11] = bytes32(vm.pc);
+        arr[12] = bytes32(vm.stack_ptr);
+        arr[13] = bytes32(vm.call_ptr);
+        arr[14] = bytes32(vm.memsize);
         return keccak256(arr);
     }
     

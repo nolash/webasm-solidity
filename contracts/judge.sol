@@ -9,9 +9,9 @@ contract Judge is CommonOnchain {
     function judge(bytes32[13] res, uint q,
                         bytes32[] _proof,
                         bytes32 vm_, bytes32 op, uint[4] regs,
-                        bytes32[10] roots, uint[4] pointers) public returns (uint) {
+                        bytes32[11] roots, uint[4] pointers) public returns (uint) {
         setMachine(vm_, op, regs[0], regs[1], regs[2], regs[3]);
-        setVM2(roots, pointers);
+        setVM(roots, pointers);
         // Special initial state
         if (q == 0) {
             m.vm = hashVM();
@@ -34,8 +34,8 @@ contract Judge is CommonOnchain {
     }
 
     function judgeFinality(bytes32[13] res, bytes32[] _proof,
-                        bytes32[10] roots, uint[4] pointers) public returns (uint) {
-        setVM2(roots, pointers);
+                        bytes32[11] roots, uint[4] pointers) public returns (uint) {
+        setVM(roots, pointers);
         m.vm = hashVM();
         state = hashMachine();
         require(m.vm == res[0]);
@@ -46,8 +46,8 @@ contract Judge is CommonOnchain {
         return 1;
     }
 
-    function checkFileProof(bytes32 state, bytes32[10] roots, uint[4] pointers, bytes32[] _proof, uint loc) public returns (bool) {
-        setVM2(roots, pointers);
+    function checkFileProof(bytes32 state, bytes32[11] roots, uint[4] pointers, bytes32[] _proof, uint loc) public returns (bool) {
+        setVM(roots, pointers);
         proof = _proof;
         return state == calcIOHash(roots) && vm_r.input_data == getRoot(loc);
     }
@@ -57,12 +57,12 @@ contract Judge is CommonOnchain {
         return uint(hash) == getLeaf(loc) && root == getRoot(loc);
     }
 
-    function calcStateHash(bytes32[10] roots, uint[4] pointers) public returns (bytes32) {
-        setVM2(roots, pointers);
+    function calcStateHash(bytes32[11] roots, uint[4] pointers) public returns (bytes32) {
+        setVM(roots, pointers);
         return hashVM();
     }
 
-    function calcIOHash(bytes32[10] roots) public pure returns (bytes32) {
+    function calcIOHash(bytes32[11] roots) public pure returns (bytes32) {
         return keccak256(roots[0], roots[7], roots[8], roots[9]);
     }
 
