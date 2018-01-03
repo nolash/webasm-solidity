@@ -14,6 +14,17 @@ interface JudgeInterface {
     function calcIOHash(bytes32[11] roots) public returns (bytes32);
 }
 
+interface CustomJudge {
+    // Initializes a new custom verification game
+    function init(bytes32 state, uint r1, uint r2, uint r3) public returns (bytes32);
+    
+    // Last time the task was updated
+    function taskClock(bytes32 id) public returns (bytes32);
+    
+    // Returns the new state if resolved
+    function resolved(bytes32 id) public returns (bytes32);
+}
+
 contract Interactive2 {
 
     JudgeInterface judge;
@@ -33,7 +44,9 @@ contract Interactive2 {
         SelectedPhase,
         
         /* Special states for finality */
-        Finality
+        Finality,
+        
+        Custom
     }
 
     struct Record {
@@ -65,6 +78,7 @@ contract Interactive2 {
         
         State state;
         
+        CustomJudge judge;
         bytes32 sub_task;
     }
 
@@ -73,6 +87,7 @@ contract Interactive2 {
     }
 
     mapping (bytes32 => Record) records;
+    mapping (uint64 => CustomJudge) judges;
     // mapping (bytes32 => VMParameters) params;
 
     event StartChallenge(address p, address c, bytes32 s, bytes32 e, uint256 par, uint to, bytes32 uniq);
@@ -106,6 +121,7 @@ contract Interactive2 {
         return uniq;
     }
     
+    // the solver shouldn't send initial state, it should be always the same
     function initialize(bytes32 id, bytes32[11] s_roots, uint[4] s_pointers, uint _steps,
                                     bytes32[11] e_roots, uint[4] e_pointers) public {
         Record storage r = records[id];
@@ -346,6 +362,15 @@ contract Interactive2 {
         Record storage r = records[id];
         require(r.state == State.SelectedPhase && r.phase == q && msg.sender == r.prover && r.idx1 == i1 &&
                 r.next == r.prover);
+        
+        uint alu_hint = (uint(op)/2**(8*3))&0xff;
+        if (q == 5 && alu_hint == 0xff) {
+          r.state = State.Custom;
+          r.judge = judges[uint64(regs[3])];
+          r.sub_task = r.judge.init(roots[10], regs[0], regs[1], regs[2]);
+          return;
+        }
+        
         judge.judge(r.result, r.phase, proof, vm, op, regs, roots, pointers);
         WinnerSelected(id);
         r.winner = r.prover;
