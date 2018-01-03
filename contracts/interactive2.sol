@@ -354,6 +354,11 @@ contract Interactive2 {
 
     event WinnerSelected(bytes32 id);
     
+    function resolveCustom(bytes32 id) {
+        Record storage r = records[id];
+        require (r.judge.resolved() != 0);
+    }
+    
     // so here, if the operation is custom, and phase is ALU, we need to start custom judging
     function callJudge(bytes32 id, uint i1, uint q,
                         bytes32[] proof,
