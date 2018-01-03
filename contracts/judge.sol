@@ -32,6 +32,17 @@ contract Judge is CommonOnchain {
         return q;
         // return (q, state, debug);
     }
+    
+    function judgeCustom(bytes32 start, bytes32 next, bytes32 ex_state, uint ex_reg, bytes32 op, uint[4] regs, bytes32[11] roots, uint[4] pointers) public {
+        setVM(roots, pointers);
+        setMachine(hashVM(), op, regs[0], regs[1], regs[2], regs[3]);
+        require(hashMachine() == start);
+        vm_r.custom = ex_state;
+        m.reg1 = ex_reg;
+        m.vm = hashVM();
+        require(hashMachine() == next);
+    }
+
 
     function judgeFinality(bytes32[13] res, bytes32[] _proof,
                         bytes32[11] roots, uint[4] pointers) public returns (uint) {

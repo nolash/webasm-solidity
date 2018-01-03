@@ -7,6 +7,8 @@ interface JudgeInterface {
                         bytes32[11] roots, uint[4] pointers) public returns (uint);
     function judgeFinality(bytes32[13] res, bytes32[] _proof,
                         bytes32[11] roots, uint[4] pointers) public returns (uint);
+    function judgeCustom(bytes32 start, bytes32 next, bytes32 ex_state, uint ex_reg, bytes32 op, uint[4] regs, bytes32[11] roots, uint[4] pointers) public;
+    
     function checkFileProof(bytes32 state, bytes32[11] roots, uint[4] pointers, bytes32[] proof, uint loc) public returns (bool);
     function checkProof(bytes32 hash, bytes32 root, bytes32[] proof, uint loc) public returns (bool);
 
@@ -19,10 +21,10 @@ interface CustomJudge {
     function init(bytes32 state, uint r1, uint r2, uint r3) public returns (bytes32);
     
     // Last time the task was updated
-    function taskClock(bytes32 id) public returns (bytes32);
+    function clock(bytes32 id) public returns (uint);
     
-    // Returns the new state if resolved
-    function resolved(bytes32 id) public returns (bytes32);
+    // Check if has resolved into correct state
+    function resolved(bytes32 id, bytes32 state, uint reg) public returns (bool);
 }
 
 contract Interactive2 {
@@ -80,6 +82,8 @@ contract Interactive2 {
         
         CustomJudge judge;
         bytes32 sub_task;
+        bytes32 ex_state;
+        uint ex_reg;
     }
 
     function Interactive2(address addr) public {
@@ -178,11 +182,17 @@ contract Interactive2 {
         blocked[task_id] = r.clock + r.timeout;
         return uniq;
     }
+    
+    function checkTimeout(bytes32 id) internal returns (bool) {
+        Record storage r = records[id];
+        if (r.state == State.Custom) return block.number >= r.judge.clock(r.sub_task) + r.timeout;
+        return block.number >= r.clock + r.timeout && r.state != State.Finished;
+    }
 
     function gameOver(bytes32 id) public returns (bool) {
         Record storage r = records[id];
-        if (!(block.number >= r.clock + r.timeout && r.state != State.Finished)) return false;
-        require(block.number >= r.clock + r.timeout && r.state != State.Finished);
+        if (!checkTimeout(id)) return false;
+        require(checkTimeout(id));
         if (r.next == r.prover) {
             r.winner = r.challenger;
             rejected[r.task_id] = true;
@@ -353,10 +363,14 @@ contract Interactive2 {
     }
 
     event WinnerSelected(bytes32 id);
-    
-    function resolveCustom(bytes32 id) {
+
+    function resolveCustom(bytes32 id) public {
         Record storage r = records[id];
-        require (r.judge.resolved() != 0);
+        require (r.judge.resolved(r.sub_task, r.ex_state, r.ex_reg));
+        WinnerSelected(id);
+        r.winner = r.prover;
+        blocked[r.task_id] = 0;
+        r.state = State.Finished;
     }
     
     // so here, if the operation is custom, and phase is ALU, we need to start custom judging
@@ -373,6 +387,9 @@ contract Interactive2 {
           r.state = State.Custom;
           r.judge = judges[uint64(regs[3])];
           r.sub_task = r.judge.init(roots[10], regs[0], regs[1], regs[2]);
+          r.ex_state = proof[0];
+          r.ex_reg = uint(proof[1]);
+          judge.judgeCustom(r.result[3], r.result[4], proof[0], uint(proof[1]), op, regs, roots, pointers);
           return;
         }
         
