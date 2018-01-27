@@ -1,25 +1,36 @@
 #!/bin/bash
 
 GETH_PID=""
-GETH=`which geth` || (>&2 echo "cannot find geth binary" && exit 1)
+if [ -z $GETH ]; then
+	GETH=`which geth` || (>&2 echo "cannot find geth binary" && exit 1)
+fi
 
-function eth_kill {
+eth_kill() {
 	if [ -n "$1" ]; then
 		>&2 echo "error: $1"		
 	fi
-	geth_stop
+	geth_stop $2
 	exit 1
 }
 
-function geth_stop {
-	if [ -n $GETH_PID ]; then
-		>&2 echo "sending TERM to geth ($GETH_PID)"
-		kill -TERM $GETH_PID
+geth_stop() {
+	local gethpid=""
+	if [ "$1" != "" ]; then
+		gethpid="$1"
+	elif [ "$GETH_PID" != "" ]; then
+		gethpid=$GETH_PID
+	fi
+	if [ "$gethpid" != "" ]; then
+		ps h -p $gethpid &> /dev/null
+		if [ $? == 0 ]; then
+			>&2 echo "sending TERM to geth ($gethpid)"
+			kill -TERM $gethpid
+		fi
 	fi
 }
 
 # take the newest key if none is given
-function latest_key {
+latest_key() {
 	echo -n `find $1/keystore -regex ".*--[a-fA-F0-9].*" | sort -r | head -n1 | sed -e 's/.*Z--\([a-fA-F0-9]*\)$/\1/g'`
 }
 
@@ -29,9 +40,10 @@ do
 		-d) args_d=$2; shift;; #datadir
 		-a) args_a=$2; shift;; #account
 		-p) args_p=$2; shift;; #p2p port
-		-x) args_x=$2; shift;; #command to run after ipc is up
 		-n) args_n=$2; shift;; #net
+		-x) args_x=$2; shift;; #extra args
 		--password-file) args_passwordfile=$2; shift;;
+		--ipcrun) args_ipcrun=$2; shift;; #command to run after ipc is up
 		*) break;;
 	esac
 	shift
@@ -57,53 +69,67 @@ fi
 
 passwordfile=${args_passwordfile:-".gethpass"}
 
-if [ "$args_a" == "new" ]; then
-	echo -n xyzzy > .gethpass
-	acc=`geth $GETH_NET account new --password $passwordfile` || shutdown "failed to create new account"
-	GETH_ACCOUNT=${acc:10:40}
-else
-	GETH_ACCOUNT=${args_a:-$(latest_key $GETH_DATADIR)}
-fi
-
 
 GETH_PORT=${args_p:+" --port $args_p"}
 
-geth_args=(
-	--datadir	"${GETH_DATADIR}"
-	--unlock	"${GETH_ACCOUNT}"
-	$GETH_NET
-)
-
-function geth_ipcexec {
-	if [ ! -z ${args_x} ]; then
-		${args_x} ${GETH_DATADIR} ${GETH_ACCOUNT}
+geth_ipcexec() {
+	if [ ! -z ${args_ipcrun} ]; then
+		${args_ipcrun} ${GETH_DATADIR} ${GETH_ACCOUNT}
 		exit $?
 	fi
 }
 
 geth_start() {
-	
-	($GETH "${args[@]}" --password=$passwordfile) & 
+
+	if [ "$args_a" == "new" ]; then
+		echo -n xyzzy > $passwordfile
+		local datadir=${GETH_DATADIR:-"--datadir $GETH_DATADIR"}
+		local acc=`$GETH --datadir $datadir account new --password $passwordfile` || shutdown "failed to create new account"
+		GETH_ACCOUNT=${acc:10:40}
+	else
+		GETH_ACCOUNT=${args_a:-$(latest_key $GETH_DATADIR)}
+	fi
+
+	local geth_args=(
+		--datadir	"${GETH_DATADIR}"
+		--unlock	"${GETH_ACCOUNT}"
+		$GETH_NET
+		$GETH_EXTRA
+		$args_x
+	)
+
+	local startpoll=(${GETH_STARTPOLL//:/ })
+
+	echo >&2 "running $GETH ${geth_args[@]} --password=$passwordfile"
+	($GETH "${geth_args[@]}" --password=$passwordfile) & 
 	forked=$!
 
 	for i in {1..5}; do
-		if [ -e $GETH_DATADIR/geth.ipc ]; then
-			ipcowner=`lsof -t $GETH_DATADIR/geth.ipc`
-			if [ "$forked" == "$ipcowner" ]; then
+		if [ "${startpoll[0]}" == "ws" ]; then
+			>&2 echo "echo foo | nc ${startpoll[1]} ${startpoll[2]} ... poll $i"
+			if `echo foo | nc ${startpoll[1]} ${startpoll[2]} &> /dev/null`; then
 				GETH_PID=$forked
 				geth_ipcexec && return 0
-			else
-				if [ ! -z ${ipcowner} ]; then 
-					>&2 echo "Process ${ipcowner} already owns the this socket, exiting..." && killswarm $!
+			fi
+		else
+			>&2 echo "$GETH_DATADIR/geth.ipc poll $i"
+			if [ -e $GETH_DATADIR/geth.ipc ]; then
+				ipcowner=`lsof -t $GETH_DATADIR/geth.ipc`
+				if [ "$forked" == "$ipcowner" ]; then
+					GETH_PID=$forked
+					geth_ipcexec && return 0
+				else
+					if [ ! -z ${ipcowner} ]; then 
+						>&2 echo "Process ${ipcowner} already owns the this socket, exiting..." && killswarm $!
+					fi
+					return 1
 				fi
 			fi
 		fi
-		>&2 echo "$GETH_DATADIR/geth.ipc poll $i"
 		sleep 1
 	done
 
-	>&2 echo "gave up waiting for ipc, killing geth"
-	eth_kill $!
+	eth_kill "gave up waiting for ipc, killing geth" $!
 	return 1
 }
 

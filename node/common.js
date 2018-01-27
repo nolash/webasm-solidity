@@ -1,15 +1,28 @@
+const default_wasm_path = "/usr/local/bin/wasm"
 
 var fs = require("fs")
 var winston = require("winston")
 var Web3 = require('web3')
 var web3 = new Web3()
 var execFile = require('child_process').execFile
+var execSync = require('child_process').spawnSync;
 var ipfsAPI = require('ipfs-api')
+var syspath = process.env.PATH.split(":")
 
 // var appFile = require("./appFileBytes")
 
-// var wasm_path = process.cwd() + "/../ocaml-offchain/interpreter/wasm"
-var wasm_path = "/home/sami/ocaml-offchain/interpreter/wasm"
+var wasm_path = process.env.TRUEBIT_WASM
+if (!wasm_path) {
+	wasm_path = which("wasm")	
+}
+if (!wasm_path) {
+	if (!fs.existsSync(default_wasm_path)) {
+		console.error("wasm not found")
+		process.exit(1)
+	}
+	wasm_path = default_wasm_path
+}
+console.log("using wasm: " + wasm_path)
 
 var addresses = JSON.parse(fs.readFileSync("config.json"))
 
@@ -40,6 +53,7 @@ var exports = {}
 // console.log(dir)
 
 var format = winston.format
+console.error("format: " + format)
 
 const logger = winston.createLogger({
   level: 'info',
@@ -581,4 +595,17 @@ exports.logger = logger
 
 return exports
 
+}
+
+function which(f) {
+	for (var i = 0; i < syspath.length; i++) {
+		var p = syspath[i]
+		if (p.lastIndexOf("/") != p.length) {
+			p += "/"
+		}
+		if (fs.existsSync(p + f)) {
+			return p + f 
+		}
+	}
+	return ""
 }
