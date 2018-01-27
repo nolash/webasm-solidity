@@ -1,19 +1,22 @@
 #!/bin/sh
 
-echo plort > supersecret.txt
-if [ ! -f myaddress ]
-then
-  geth --rinkeby account new --password supersecret.txt
-fi
+me=`realpath $0`
+wd=`dirname $me`
+pushd $wd
 
-service apache2 restart
+. ./_common.sh
+. ./_geth.sh
 
-geth --rinkeby --unlock 0 --password=supersecret.txt --ws --wsaddr 0.0.0.0 -wsapi eth --wsorigins="*" &
-ipfs daemon &
+httpd_start
 
-sleep 10
+geth_start
 
-cd webasm-solidity/node
-node setup.js rinkeby.json > config.json
-node app.js
+>&2 echo "have geth on pid $GETH_PID"
 
+ipfs_start
+
+pushd $wd/node
+node setup.js rinkeby.json > config.json || eth_kill "cant setup"
+node app.js || eth_kill "cant app"
+popd
+popd
